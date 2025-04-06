@@ -1,30 +1,34 @@
 import streamlit as st
-import google.generativeai as genai
+import pandas as pd
 
-try:
-    key = st.secrets['gemini_api_key']
-    genai.configure(api_key=key)
-    model = genai.GenerativeModel('gemini-2.0-flash-lite')
+st.set_page_config(page_title="CSV Upload", layout="centered")
 
-    if "chat" not in st.session_state:
-        st.session_state.chat = model.start_chat(history=[])
-    st.title("Gemini Pro Test")
+st.title("📂 Upload CSV for Chat with Data")
 
-    def role_to_streamlit(role:str) -> str:
-        if role == 'model':
-            return 'assistant'
-        else:
-            return role
+# ปุ่มให้อัปโหลดไฟล์ CSV
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-    for message in st.session_state.chat.history:
-        with st.chat_message(role_to_streamlit(message.role)):
-            st.markdown(message.parts[0].text)
+# เช็คว่ามีไฟล์อัปโหลดหรือยัง
+if uploaded_file is not None:
+    # อ่านข้อมูล CSV ด้วย Pandas
+    df = pd.read_csv(uploaded_file)
 
-    if prompt := st.chat_input("Text Here"):
-        st.chat_message('user').markdown(prompt)
-        response = st.session_state.chat.send_message(prompt)
-        with st.chat_message('assistant'):
-            st.markdown(response.text)
+    st.subheader("📊 Uploaded Data Preview")
+    st.dataframe(df.head())  # แสดง 5 แถวแรก
 
-except Exception as e:
-    st.error(f'An error occurred {e}')
+    # ตัวเลือก checkbox เพื่อควบคุมการวิเคราะห์ข้อมูล
+    if st.checkbox("Analyze CSV Data with AI"):
+        st.success("✅ CSV Analysis activated!")
+
+        # 🔍 ตัวอย่างการวิเคราะห์เบื้องต้น
+        st.subheader("🔎 Basic Data Insights")
+        st.write("Number of Rows:", df.shape[0])
+        st.write("Number of Columns:", df.shape[1])
+        st.write("Column Names:", list(df.columns))
+
+        # ใส่การวิเคราะห์อื่น ๆ ได้ เช่น การหาค่าที่ซ้ำหรือข้อมูลที่ขาดหาย
+        st.write("Missing Values:")
+        st.write(df.isnull().sum())
+
+else:
+    st.info("Please upload a CSV file to get started.")
