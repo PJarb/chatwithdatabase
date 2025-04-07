@@ -12,7 +12,7 @@ except Exception as e:
     st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
-st.title("🧠 Chat with Your CSV Dataset (All-in-One)")
+st.title("🧠 Chat with Your Data (All-in-One)")
 
 # === Upload Dataset ===
 st.subheader("📁 Upload CSV Dataset")
