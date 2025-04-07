@@ -12,30 +12,24 @@ except Exception as e:
     st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
-st.title("🧠 Chat with Your Database")
+st.title("🧠 Chat with Your Data (All-in-One)")
 
-tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
+# === Upload Dataset ===
+st.subheader("📁 Upload CSV Dataset")
+uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
+if uploaded_csv:
+    df = pd.read_csv(uploaded_csv)
+    st.session_state.df = df
+    st.success("✅ Dataset uploaded successfully!")
+    st.dataframe(df.head())
+else:
+    st.info("Please upload a CSV dataset to continue.")
 
-# Upload CSV
-with tab1:
-    st.header("📁 Upload CSV Dataset (Required)")
-    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
-    if uploaded_csv:
-        df = pd.read_csv(uploaded_csv)
-        st.session_state.df = df
-        st.success("✅ Dataset uploaded successfully!")
-        st.dataframe(df.head())
-    else:
-        st.info("Please upload a CSV dataset to continue.")
-
-# Generate Dictionary
+# === Upload or Generate Data Dictionary ===
 def generate_data_dictionary(df):
     dict_entries = []
     for col in df.columns:
         sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A"
-        dtype = df[col].dtype
-
-        # แปลง dtype เป็น string ที่ Gemini เข้าใจ
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             inferred_type = "DATE"
         elif pd.api.types.is_integer_dtype(df[col]):
@@ -47,28 +41,30 @@ def generate_data_dictionary(df):
         else:
             inferred_type = "STRING"
 
-        # 📍ใช้ Gemini ช่วย generate description
+        # 🔮 Gemini-generated description with better prompt
         try:
-            prompt = f"""You are a data analyst. Please describe the meaning or likely purpose of the column named '{col}'.
-Its data type is {inferred_type} and here's an example value: '{sample_value}'.
-Write a concise and informative description for a data dictionary."""
+            prompt = f"""
+You are a professional data dictionary creator. 
+Write a clear, concise, and informative description for a dataset column with the following details:
+- Column Name: {col}
+- Data Type: {inferred_type}
+- Example Value: "{sample_value}"
+Avoid vague phrases. Be specific but not overly detailed. Keep it one sentence only.
+"""
             response = model.generate_content(prompt)
-            description = response.text.strip()
+            description = response.text.strip().replace("\n", " ").replace("**", "")
         except Exception as e:
             description = f"This column likely represents '{col}'"
 
         dict_entries.append({
             "column_name": col,
             "data_type": inferred_type,
-            "example_value": sample_value,
             "description": description
         })
-
     return pd.DataFrame(dict_entries)
 
-
-with tab2:
-    st.header("📁 Upload Data Dictionary (Optional)")
+if "df" in st.session_state:
+    st.subheader("📑 Data Dictionary")
     uploaded_dict = st.file_uploader("Upload data dictionary (.csv or .xlsx)", type=["csv", "xlsx"])
     if uploaded_dict:
         if uploaded_dict.name.endswith(".csv"):
@@ -76,23 +72,20 @@ with tab2:
         else:
             data_dict = pd.read_excel(uploaded_dict)
         st.success("✅ Data Dictionary uploaded!")
-    elif "df" in st.session_state:
-        st.info("No dictionary uploaded. Generating from dataset...")
-        data_dict = generate_data_dictionary(st.session_state.df)
     else:
-        st.stop()
+        st.info("⚙️ No dictionary uploaded. Generating from dataset using Gemini...")
+        data_dict = generate_data_dictionary(st.session_state.df)
 
     st.session_state.data_dict = data_dict
     st.dataframe(data_dict)
 
-# Build Prompt
+# === Chat Section ===
 def build_prompt(question, data_dict, df_name="df", df=None):
-    data_dict_text = "\n".join(
+    dict_text = "\n".join(
         '- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description']
         for _, row in data_dict.iterrows()
     )
     sample_data = df.head(2).to_dict(orient="records") if df is not None else ""
-
     return f"""
 You are a helpful Python code generator.
 Generate Python code that answers the user's question based on the DataFrame.
@@ -104,7 +97,7 @@ Generate Python code that answers the user's question based on the DataFrame.
 {df_name}
 
 **DataFrame Details:**
-{data_dict_text}
+{dict_text}
 
 **Sample Data:**
 {sample_data}
@@ -118,46 +111,39 @@ Generate Python code that answers the user's question based on the DataFrame.
 6. Do not include explanation, only valid executable Python code.
 """
 
-# Ask Questions
-with tab3:
-    st.markdown("---")
-    st.header("💬 Ask a question about your dataset")
+if "df" in st.session_state and "data_dict" in st.session_state:
+    st.subheader("💬 Ask a Question")
+    user_question = st.text_input("Ask something about your dataset:")
+    if user_question:
+        with st.spinner("Thinking..."):
+            try:
+                prompt = build_prompt(
+                    question=user_question,
+                    data_dict=st.session_state.data_dict,
+                    df_name="df",
+                    df=st.session_state.df
+                )
+                response = model.generate_content(prompt)
+                code = response.text
+                query = code.replace("```", "#")
 
-    if "df" in st.session_state and "data_dict" in st.session_state:
-        user_question = st.text_input("Ask a question about your dataset:")
-        if user_question:
-            with st.spinner("Thinking..."):
                 try:
-                    prompt = build_prompt(
-                        question=user_question,
-                        data_dict=st.session_state.data_dict,
-                        df_name="df",
-                        df=st.session_state.df
-                    )
-                    response = model.generate_content(prompt)
-                    code = response.text
-
-                    try:
-                        query = code.replace("```", "#")
-                        exec(query, globals())
-
-                        explain_prompt = (
-                            f"The user asked: {user_question}\n\n"
-                            f"Here is the result stored in ANSWER:\n{ANSWER}\n\n"
-                            f"Please summarize the result and explain what it means.\n"
-                            f"Then, based on the question, give your opinion about what kind of customer persona this might be "
-                            f"(e.g., data-driven, business-minded, technical, impatient, etc.)."
-                        )
-
-                        summary = model.generate_content(explain_prompt).text
-
-                        st.markdown(f"**📜 Question:** {user_question}")
-                        st.markdown("**🧠 Gemini's Summary:**")
-                        st.markdown(summary)
-                    except Exception as e:
-                        st.error(f"❌ Error in executing code from Gemini: {e}")
-                        st.code(code, language="python")
+                    exec(query, globals())
+                    explain_prompt = f"""
+The user asked: {user_question}
+Here is the result: {ANSWER}
+Please summarize and explain the answer.
+Include your opinion of the user's persona.
+"""
+                    summary = model.generate_content(explain_prompt).text
+                    st.markdown(f"**📜 Question:** {user_question}")
+                    st.markdown("**🧠 Gemini's Summary:**")
+                    st.markdown(summary)
                 except Exception as e:
-                    st.error(f"❌ Gemini API error: {e}")
-    else:
-        st.info("Please upload a dataset first to enable the chat.")
+                    st.error(f"❌ Error executing generated code: {e}")
+                    st.code(code, language="python")
+
+            except Exception as e:
+                st.error(f"❌ Gemini API Error: {e}")
+
+st.caption(f"Gemini SDK version: {genai.__version__}")
