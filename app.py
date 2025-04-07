@@ -14,10 +14,9 @@ except Exception as e:
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your Database")
 
-# Tabs
 tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
 
-# -------------------- Upload CSV Dataset -------------------- #
+# Upload CSV
 with tab1:
     st.header("📁 Upload CSV Dataset (Required)")
     uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
@@ -29,7 +28,7 @@ with tab1:
     else:
         st.info("Please upload a CSV dataset to continue.")
 
-# -------------------- Upload/Generate Data Dictionary -------------------- #
+# Generate Dictionary
 def generate_data_dictionary(df):
     dict_entries = []
     for col in df.columns:
@@ -72,7 +71,7 @@ with tab2:
     st.session_state.data_dict = data_dict
     st.dataframe(data_dict)
 
-# -------------------- Ask Questions -------------------- #
+# Build Prompt
 def build_prompt(question, data_dict, df_name="df", df=None):
     data_dict_text = "\n".join(
         '- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description']
@@ -105,6 +104,7 @@ Generate Python code that answers the user's question based on the DataFrame.
 6. Do not include explanation, only valid executable Python code.
 """
 
+# Ask Questions
 with tab3:
     st.markdown("---")
     st.header("💬 Ask a question about your dataset")
@@ -124,18 +124,17 @@ with tab3:
                     code = response.text
 
                     try:
-                        exec(code, globals())
-                        explain_prompt = f'''
+                        query = code.replace("```", "#")
+                        exec(query, globals())
 
-query = response.text.replace("```", "#")
-exec(query)
+                        explain_prompt = (
+                            f"The user asked: {user_question}\n\n"
+                            f"Here is the result stored in ANSWER:\n{ANSWER}\n\n"
+                            f"Please summarize the result and explain what it means.\n"
+                            f"Then, based on the question, give your opinion about what kind of customer persona this might be "
+                            f"(e.g., data-driven, business-minded, technical, impatient, etc.)."
+                        )
 
-explain_the_results = f'''
-The user asked {user_question}
-Here is the results: {ANSWER}
-Answer the question and summarize the answer.
-Include your opinions of the persona of this customer.
-'''
                         summary = model.generate_content(explain_prompt).text
 
                         st.markdown(f"**📜 Question:** {user_question}")
@@ -148,4 +147,3 @@ Include your opinions of the persona of this customer.
                     st.error(f"❌ Gemini API error: {e}")
     else:
         st.info("Please upload a dataset first to enable the chat.")
-
