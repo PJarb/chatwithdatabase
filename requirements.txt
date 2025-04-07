@@ -1,4 +1,3 @@
 google-generativeai
 tabulate
-google-generativeai>=0.3.1
 
