@@ -7,13 +7,13 @@ import textwrap
 try:
     key = st.secrets["gemini_api_key"]
     genai.configure(api_key=key)
-    model = genai.GenerativeModel(model_name='gemini-2.0-flash-lite')
+    model = genai.GenerativeModel(model_name="gemini-2.0-flash-lite")
 except Exception as e:
     st.error(f"❌ Failed to load Gemini API: {e}")
     st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
-st.title("🧐 Chat with Your CSV Dataset (Powered by Gemini AI)")
+st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
@@ -74,17 +74,14 @@ with tab2:
     st.dataframe(data_dict)
 
 # -------------------- Ask Questions -------------------- #
-def build_prompt(question, data_dict, df_name="df", df=None):
-    data_dict_text = "\n".join('-' + row['column_name'] + ': ' + row['data_type'] + '. ' + row['description'] for _, row in data_dict.iterrows())
-    example_record = df.head(2).to_dict(orient="records") if df is not None else ""
-
+def build_code_prompt(question, data_dict, df_name="df", df=None):
+    dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
+    sample_text = df.head(2).to_dict(orient="records") if df is not None else ""
     return f"""
 You are a helpful Python code generator.
-Your goal is to write Python code snippets based on the user's question
-and the provided DataFrame information.
+Your goal is to write Python code snippets based on the user's question and the provided DataFrame information.
 
 Here's the context:
-
 **User Question:**
 {question}
 
@@ -92,28 +89,23 @@ Here's the context:
 {df_name}
 
 **DataFrame Details:**
-{data_dict_text}
+{dict_text}
 
 **Sample Data (Top 2 Rows):**
-{example_record}
+{sample_text}
 
 **Instructions:**
-1. Write Python code that addresses the user's question by querying or
-manipulating the DataFrame.
-2. **Crucially, use the `exec()` function to execute the generated
-code.**
-3. Do not import pandas
-4. Change date column type to datetime
-5. **Store the result of the executed code in a variable named
-`ANSWER`.**
-This variable should hold the answer to the user's question (e.g.,
-a filtered DataFrame, a calculated value, etc.).
-6. Assume the DataFrame is already loaded into a pandas DataFrame object
-named `{df_name}`. Do not include code to load the DataFrame.
-7. Keep the generated code concise and focused on answering the question.
-8. If the question requires a specific output format (e.g., a list, a
-single value), ensure the `query_result` variable holds that format.
+1. Write Python code that addresses the user's question by querying or manipulating the DataFrame.
+2. Use the `exec()` function to execute the generated code.
+3. Do not import pandas.
+4. Change date column type to datetime if needed.
+5. Store the result of the executed code in a variable named `ANSWER`.
+6. Assume the DataFrame is already loaded into a pandas DataFrame object named `{df_name}`.
+7. Keep the code concise and focused on answering the question.
 """
+
+def clean_code_block(text):
+    return text.replace("```python", "").replace("```", "").strip()
 
 with tab3:
     st.markdown("---")
@@ -124,28 +116,35 @@ with tab3:
         if user_question:
             with st.spinner("Thinking..."):
                 try:
-                    prompt = build_prompt(
+                    prompt = build_code_prompt(
                         question=user_question,
                         data_dict=st.session_state.data_dict,
                         df_name="df",
                         df=st.session_state.df
                     )
                     response = model.generate_content(prompt)
+                    code = clean_code_block(response.text)
 
-                    query = response.text.replace("```", "")
-                    exec(query)
+                    # Execute the generated code and retrieve ANSWER
+                    try:
+                        exec_locals = {"df": st.session_state.df.copy()}
+                        exec(code, {}, exec_locals)
+                        answer = exec_locals.get("ANSWER", "No variable named 'ANSWER' found.")
+                    except Exception as e:
+                        answer = f"❌ Error while executing generated code: {e}"
 
-                    explain_the_results = f'''
-                    the user asked {user_question},
-                    here is the results {ANSWER}
-                    answer the question and summarize the answer,
-                    include your opinions of the persona of this customer
-                    '''
+                    # Summarize result
+                    explanation_prompt = f"""
+the user asked: {user_question},
+here is the results: {answer}
+answer the question and summarize the answer,
+include your opinions of the persona of this customer
+"""
+                    summary = model.generate_content(explanation_prompt)
 
-                    summary = model.generate_content(explain_the_results)
-
-                    st.markdown(f"**📜 Code Answered:**\n```python\n{query}\n```")
-                    st.markdown("**🧬 Gemini's Summary:**")
+                    # Display
+                    st.markdown(f"**📜 Question:** {user_question}")
+                    st.markdown("**🧠 Gemini's Summary:**")
                     st.write(summary.text)
                 except Exception as e:
                     st.error(f"❌ Gemini API error: {e}")
