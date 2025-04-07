@@ -5,7 +5,7 @@ import textwrap
 
 # ตั้งค่า Gemini API Key
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your-gemini-api-key")
-genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key=st.secrets.get("GEMINI_API_KEY"))
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
