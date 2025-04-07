@@ -3,23 +3,25 @@ import pandas as pd
 import google.generativeai as genai
 import textwrap
 
-# 🔑 Load Gemini API Key (from secrets)
+# 🔑 Load Gemini API Key (จาก secrets)
 try:
-    key = st.secrets['gemini_api_key']
+    key = st.secrets["gemini_api_key"]
     genai.configure(api_key=key)
-    model = genai.GenerativeModel('gemini-2.0-flash-lite')
+    model = genai.GenerativeModel("models/gemini-pro")
+except Exception as e:
+    st.error(f"❌ Failed to load Gemini API: {e}")
+    st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
 
-# Tabs 
+# Tabs
 tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
 
 # -------------------- Upload CSV Dataset -------------------- #
 with tab1:
     st.header("📁 Upload CSV Dataset (Required)")
     uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
-
     if uploaded_csv:
         df = pd.read_csv(uploaded_csv)
         st.session_state.df = df
@@ -56,7 +58,6 @@ def generate_data_dictionary(df):
 with tab2:
     st.header("📁 Upload Data Dictionary (Optional)")
     uploaded_dict = st.file_uploader("Upload data dictionary (.csv or .xlsx)", type=["csv", "xlsx"])
-
     if uploaded_dict:
         if uploaded_dict.name.endswith(".csv"):
             data_dict = pd.read_csv(uploaded_dict)
@@ -76,7 +77,6 @@ with tab2:
 def build_prompt(question, data_dict, df_name="df", df=None):
     dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
     sample_text = df.head(2).to_dict(orient="records") if df is not None else ""
-
     return f"""
 You are a helpful data analyst.
 Answer the user's question using the given DataFrame.
@@ -99,34 +99,14 @@ If calculation is required, explain your reasoning and show final result.
 
 with tab3:
     st.markdown("---")
-    st.header("💬  Ask a question about your dataset")
+    st.header("💬 Ask a question about your dataset")
 
     if "df" in st.session_state and "data_dict" in st.session_state:
         user_question = st.text_input("Ask a question about your dataset:")
-
         if user_question:
             with st.spinner("Thinking..."):
-                preview_text = st.session_state.df.head(5).to_string(index=False)
-                schema_description = "\n".join(
-                    f"- {col}: {str(st.session_state.df[col].dtype)}"
-                    for col in st.session_state.df.columns
-                )
-
-                prompt = f"""
-You are a data expert. You will receive a pandas DataFrame schema and a sample of the data.
-
-Schema:
-{schema_description}
-
-Data Sample:
-{preview_text}
-
-Now answer this question about the data:
-{user_question}
-"""
-
                 try:
-                    model = genai.GenerativeModel("models/gemini-pro")
+                    prompt = build_prompt(user_question, st.session_state.data_dict, df="df", df=st.session_state.df)
                     response = model.generate_content(prompt)
                     st.markdown(f"**📜 Question:** {user_question}")
                     st.markdown("**🧠 Gemini's Answer:**")
@@ -135,4 +115,5 @@ Now answer this question about the data:
                     st.error(f"❌ Gemini API error: {e}")
     else:
         st.info("Please upload a dataset first to enable the chat.")
+
 st.caption(f"Gemini SDK version: {genai.__version__}")
