@@ -130,7 +130,8 @@ with tab3:
 query = response.text.replace("```", "#")
 exec(query)
 
-The user asked: {user_question}
+explain_the_results = f'''
+The user asked {user_question}
 Here is the results: {ANSWER}
 Answer the question and summarize the answer.
 Include your opinions of the persona of this customer.
