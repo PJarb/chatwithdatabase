@@ -126,6 +126,10 @@ with tab3:
                     try:
                         exec(code, globals())
                         explain_prompt = f'''
+
+query = response.text.replace("```", "#")
+exec(query)
+
 The user asked: {user_question}
 Here is the results: {ANSWER}
 Answer the question and summarize the answer.
@@ -144,4 +148,3 @@ Include your opinions of the persona of this customer.
     else:
         st.info("Please upload a dataset first to enable the chat.")
 
-st.caption(f"Gemini SDK version: {genai.__version__}")
