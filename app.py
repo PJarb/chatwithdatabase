@@ -3,15 +3,15 @@ import pandas as pd
 import google.generativeai as genai
 import textwrap
 
-# ตั้งค่า Gemini API Key
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your-gemini-api-key")
-genai.configure(api_key=st.secrets.get("GEMINI_API_KEY"))
+# 🔑 Load Gemini API Key (from secrets)
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
 
 # Tabs 
-tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📑 Data Dictionary", "💬 Ask Questions"])
+tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
 
 # -------------------- Upload CSV Dataset -------------------- #
 with tab1:
@@ -52,7 +52,7 @@ def generate_data_dictionary(df):
     return pd.DataFrame(dict_entries)
 
 with tab2:
-    st.header("📑 Upload Data Dictionary (Optional)")
+    st.header("📁 Upload Data Dictionary (Optional)")
     uploaded_dict = st.file_uploader("Upload data dictionary (.csv or .xlsx)", type=["csv", "xlsx"])
 
     if uploaded_dict:
@@ -124,9 +124,9 @@ Now answer this question about the data:
 """
 
                 try:
-                    model = genai.GenerativeModel("gemini-pro")
+                    model = genai.GenerativeModel("models/gemini-pro")
                     response = model.generate_content(prompt)
-                    st.markdown(f"**🧾 Question:** {user_question}")
+                    st.markdown(f"**📜 Question:** {user_question}")
                     st.markdown("**🧠 Gemini's Answer:**")
                     st.write(response.text)
                 except Exception as e:
