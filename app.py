@@ -1,125 +1,114 @@
 import streamlit as st
 import pandas as pd
+import google.generativeai as genai
+import textwrap
 
-st.set_page_config(page_title="Upload Dataset + Dictionary", layout="wide")
-st.title("🧠 CSV Chatbot Assistant with Optional Data Dictionary")
+# ตั้งค่า Gemini API Key
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your-gemini-api-key")
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Tabs: แยกเป็น 2 หน้าชัดเจน
-tab1, tab2 = st.tabs(["📁 Upload CSV Dataset", "📑 Upload Data Dictionary"])
+st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
+st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
 
-# -------------------- TAB 1: Upload CSV Dataset -------------------- #
+# Tabs 
+tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📑 Data Dictionary", "💬 Ask Questions"])
+
+# -------------------- Upload CSV Dataset -------------------- #
 with tab1:
     st.header("📁 Upload CSV Dataset (Required)")
-    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"], key="csv_upload")
+    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
 
-    if uploaded_csv is not None:
+    if uploaded_csv:
         df = pd.read_csv(uploaded_csv)
+        st.session_state.df = df
         st.success("✅ Dataset uploaded successfully!")
-        st.subheader("📊 Preview of Dataset")
         st.dataframe(df.head())
     else:
-        st.info("Please upload your main CSV dataset to proceed.")
+        st.info("Please upload a CSV dataset to continue.")
 
-# -------------------- TAB 2: Upload Data Dictionary -------------------- #
+# -------------------- Upload/Generate Data Dictionary -------------------- #
+def generate_data_dictionary(df):
+    dict_entries = []
+    for col in df.columns:
+        sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A"
+        dtype = df[col].dtype
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            inferred_type = "date"
+        elif pd.api.types.is_integer_dtype(df[col]):
+            inferred_type = "int64"
+        elif pd.api.types.is_float_dtype(df[col]):
+            inferred_type = "float64"
+        elif pd.api.types.is_bool_dtype(df[col]):
+            inferred_type = "bool"
+        else:
+            inferred_type = "string"
+
+        dict_entries.append({
+            "column_name": col,
+            "data_type": inferred_type,
+            "example_value": sample_value,
+            "description": f"This column likely represents '{col}'"
+        })
+    return pd.DataFrame(dict_entries)
+
 with tab2:
     st.header("📑 Upload Data Dictionary (Optional)")
-    uploaded_dict = st.file_uploader("Upload a data dictionary (.csv or .xlsx)", type=["csv", "xlsx"], key="dict_upload")
+    uploaded_dict = st.file_uploader("Upload data dictionary (.csv or .xlsx)", type=["csv", "xlsx"])
 
-    # ถ้า user ไม่ได้อัปโหลด dictionary แต่มี dataset แล้ว → ให้สร้างอัตโนมัติ
-    if uploaded_dict is not None:
+    if uploaded_dict:
+        if uploaded_dict.name.endswith(".csv"):
+            data_dict = pd.read_csv(uploaded_dict)
+        else:
+            data_dict = pd.read_excel(uploaded_dict)
         st.success("✅ Data Dictionary uploaded!")
-        try:
-            if uploaded_dict.name.endswith(".csv"):
-                data_dict = pd.read_csv(uploaded_dict)
-            else:
-                data_dict = pd.read_excel(uploaded_dict)
-            st.subheader("📖 Uploaded Data Dictionary")
-            st.dataframe(data_dict)
-        except Exception as e:
-            st.error(f"❌ Error reading data dictionary: {e}")
-    elif "df" in locals():
-        st.warning("⚠️ No Data Dictionary uploaded. Generating one with AI...")
-
-        def generate_data_dictionary(df):
-            dict_entries = []
-
-            for col in df.columns:
-                sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A"
-                dtype = df[col].dtype
-
-                # ตรวจจับประเภทข้อมูลโดยละเอียด
-                if pd.api.types.is_datetime64_any_dtype(df[col]):
-                    inferred_type = "date"
-                elif pd.api.types.is_integer_dtype(df[col]):
-                    inferred_type = "int64"
-                elif pd.api.types.is_float_dtype(df[col]):
-                    inferred_type = "float64"
-                elif pd.api.types.is_bool_dtype(df[col]):
-                    inferred_type = "bool"
-                elif pd.api.types.is_string_dtype(df[col]) or dtype == "object":
-                    try:
-                        # พยายามแปลงเป็นวันที่เพื่อดูว่าใช่ date หรือไม่
-                        parsed = pd.to_datetime(df[col], errors="coerce")
-                        if parsed.notna().sum() > 0:
-                            inferred_type = "date"
-                        else:
-                            inferred_type = "string"
-                    except:
-                        inferred_type = "string"
-                else:
-                    inferred_type = str(dtype)
-
-                dict_entries.append({
-                    "Column Name": col,
-                    "Data Type": inferred_type,
-                    "Example Value": sample_value,
-                    "Description": "Auto-generated description (can be edited)"
-                })
-
-            return pd.DataFrame(dict_entries)
-
-        generated_dict = generate_data_dictionary(df)
-        st.subheader("🤖 Auto-Generated Data Dictionary")
-        st.dataframe(generated_dict)
+    elif "df" in st.session_state:
+        st.info("No dictionary uploaded. Generating from dataset...")
+        data_dict = generate_data_dictionary(st.session_state.df)
     else:
-        st.info("Please upload a CSV dataset first in the first tab.")
+        st.stop()
 
-import google.generativeai as genai
+    st.session_state.data_dict = data_dict
+    st.dataframe(data_dict)
 
-# ใส่ Gemini API Key (ตรงนี้ควรใช้ st.secrets หรือ env จริงๆ)
-genai.configure(api_key="YOUR_GEMINI_API_KEY")
+# -------------------- Ask Questions -------------------- #
+def build_prompt(question, data_dict, df_name="df", df=None):
+    dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
+    sample_text = df.head(2).to_dict(orient="records") if df is not None else ""
 
-st.markdown("---")
-st.header("💬 Chat with Your Dataset")
+    return f"""
+You are a helpful data analyst.
+Answer the user's question using the given DataFrame.
 
-if "df" in locals():
-    user_question = st.text_input("Ask a question about your dataset:")
-    
-    if user_question:
-        with st.spinner("Thinking..."):
-            # สร้างสรุปเนื้อหาจาก DataFrame
-            preview_text = df.head(5).to_markdown(index=False)
-            schema_description = "\n".join(
-                f"- {col}: {str(df[col].dtype)}" for col in df.columns
-            )
+**User Question:**
+{question}
 
-            prompt = f"""
-You are a data expert. You will receive a pandas DataFrame schema and a sample of the data.
+**DataFrame Name:**
+{df_name}
 
-Schema:
-{schema_description}
+**Data Dictionary:**
+{dict_text}
 
-Data Sample:
-{preview_text}
+**Sample Data:**
+{sample_text}
 
-Now answer this question about the data:
-{user_question}
+Respond with the answer directly.
+If calculation is required, explain your reasoning and show final result.
 """
 
-            # ใช้ Gemini ในการตอบ
-            model = genai.GenerativeModel('gemini-2.0-flash-lite')
-            response = model.generate_content(prompt)
-            st.markdown("#### 🧠 Gemini's Answer")
-            st.write(response.text)
-else:
-    st.info("Please upload a dataset first to enable the chat.")
+with tab3:
+    st.header("💬 Ask a question about your dataset")
+
+    if "df" in st.session_state and "data_dict" in st.session_state:
+        user_question = st.text_input("Ask a question about your dataset:")
+
+        if user_question:
+            prompt = build_prompt(user_question, st.session_state.data_dict, df_name="df", df=st.session_state.df)
+            try:
+                model = genai.GenerativeModel("gemini-pro")
+                response = model.generate_content(prompt)
+                st.markdown("### 🤖 Gemini's Answer")
+                st.write(response.text)
+            except Exception as e:
+                st.error(f"❌ Gemini API error: {e}")
+    else:
+        st.warning("Please upload both a dataset and generate/upload a data dictionary first.")
