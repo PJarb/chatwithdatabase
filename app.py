@@ -1,27 +1,33 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="CSV + Data Dictionary Upload", layout="centered")
+st.set_page_config(page_title="Upload Dataset + Dictionary", layout="wide")
+st.title("🧠 CSV Chatbot Assistant with Optional Data Dictionary")
 
-st.title("📊 Upload Dataset and Optional Data Dictionary")
+# Tabs: แยกเป็น 2 หน้าชัดเจน
+tab1, tab2 = st.tabs(["📁 Upload CSV Dataset", "📑 Upload Data Dictionary"])
 
-# 1. Upload CSV Dataset (Required)
-st.header("📁 Upload CSV Dataset (Required)")
-uploaded_csv = st.file_uploader("Upload your main dataset (CSV format)", type=["csv"], key="dataset")
+# -------------------- TAB 1: Upload CSV Dataset -------------------- #
+with tab1:
+    st.header("📁 Upload CSV Dataset (Required)")
+    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"], key="csv_upload")
 
-# 2. Upload Data Dictionary (Optional)
-st.header("📑 Upload Data Dictionary (Optional)")
-uploaded_dict = st.file_uploader("Upload your data dictionary (CSV or Excel)", type=["csv", "xlsx"], key="dictionary")
+    if uploaded_csv is not None:
+        df = pd.read_csv(uploaded_csv)
+        st.success("✅ Dataset uploaded successfully!")
+        st.subheader("📊 Preview of Dataset")
+        st.dataframe(df.head())
+    else:
+        st.info("Please upload your main CSV dataset to proceed.")
 
-# เมื่อผู้ใช้ upload dataset แล้ว
-if uploaded_csv is not None:
-    df = pd.read_csv(uploaded_csv)
-    st.subheader("✅ Dataset Preview")
-    st.dataframe(df.head())
+# -------------------- TAB 2: Upload Data Dictionary -------------------- #
+with tab2:
+    st.header("📑 Upload Data Dictionary (Optional)")
+    uploaded_dict = st.file_uploader("Upload a data dictionary (.csv or .xlsx)", type=["csv", "xlsx"], key="dict_upload")
 
-    # ตรวจสอบว่ามี Data Dictionary มั้ย
+    # ถ้า user ไม่ได้อัปโหลด dictionary แต่มี dataset แล้ว → ให้สร้างอัตโนมัติ
     if uploaded_dict is not None:
-        st.success("✅ Using uploaded data dictionary.")
+        st.success("✅ Data Dictionary uploaded!")
         try:
             if uploaded_dict.name.endswith(".csv"):
                 data_dict = pd.read_csv(uploaded_dict)
@@ -31,10 +37,9 @@ if uploaded_csv is not None:
             st.dataframe(data_dict)
         except Exception as e:
             st.error(f"❌ Error reading data dictionary: {e}")
-    else:
+    elif "df" in locals():
         st.warning("⚠️ No Data Dictionary uploaded. Generating one with AI...")
-        
-        # 🔍 สร้าง Data Dictionary แบบง่ายจากข้อมูล df
+
         def generate_data_dictionary(df):
             dict_entries = []
             for col in df.columns:
@@ -42,7 +47,7 @@ if uploaded_csv is not None:
                     "Column Name": col,
                     "Data Type": str(df[col].dtype),
                     "Example Value": df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A",
-                    "Description": "Auto-generated description (to be filled)"
+                    "Description": "Auto-generated description (can be edited)"
                 }
                 dict_entries.append(entry)
             return pd.DataFrame(dict_entries)
@@ -50,6 +55,5 @@ if uploaded_csv is not None:
         generated_dict = generate_data_dictionary(df)
         st.subheader("🤖 Auto-Generated Data Dictionary")
         st.dataframe(generated_dict)
-
-else:
-    st.info("Please upload a CSV dataset to proceed.")
+    else:
+        st.info("Please upload a CSV dataset first in the first tab.")
