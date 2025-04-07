@@ -4,8 +4,10 @@ import google.generativeai as genai
 import textwrap
 
 # 🔑 Load Gemini API Key (from secrets)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+try:
+    key = st.secrets['gemini_api_key']
+    genai.configure(api_key=key)
+    model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
