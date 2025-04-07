@@ -83,3 +83,43 @@ with tab2:
         st.dataframe(generated_dict)
     else:
         st.info("Please upload a CSV dataset first in the first tab.")
+
+import google.generativeai as genai
+
+# ใส่ Gemini API Key (ตรงนี้ควรใช้ st.secrets หรือ env จริงๆ)
+genai.configure(api_key="YOUR_GEMINI_API_KEY")
+
+st.markdown("---")
+st.header("💬 Chat with Your Dataset")
+
+if "df" in locals():
+    user_question = st.text_input("Ask a question about your dataset:")
+    
+    if user_question:
+        with st.spinner("Thinking..."):
+            # สร้างสรุปเนื้อหาจาก DataFrame
+            preview_text = df.head(5).to_markdown(index=False)
+            schema_description = "\n".join(
+                f"- {col}: {str(df[col].dtype)}" for col in df.columns
+            )
+
+            prompt = f"""
+You are a data expert. You will receive a pandas DataFrame schema and a sample of the data.
+
+Schema:
+{schema_description}
+
+Data Sample:
+{preview_text}
+
+Now answer this question about the data:
+{user_question}
+"""
+
+            # ใช้ Gemini-Pro ในการตอบ
+            model = genai.GenerativeModel("gemini-pro")
+            response = model.generate_content(prompt)
+            st.markdown("#### 🧠 Gemini's Answer")
+            st.write(response.text)
+else:
+    st.info("Please upload a dataset first to enable the chat.")
