@@ -1,4 +1,4 @@
-install -U google-generativeai
+!pip install -q -U google-generativeai
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
