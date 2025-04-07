@@ -96,19 +96,40 @@ If calculation is required, explain your reasoning and show final result.
 """
 
 with tab3:
-    st.header("💬 Ask a question about your dataset")
+    st.markdown("---")
+    st.header("💬  Ask a question about your dataset")
 
-    if "df" in st.session_state and "data_dict" in st.session_state:
-        user_question = st.text_input("Ask a question about your dataset:")
+    if "df" in locals():
+    user_question = st.text_input("Ask a question about your dataset:")
+    
+    if user_question:
+        with st.spinner("Thinking..."):
+            # ✅ Use safer preview (no tabulate dependency)
+            preview_text = df.head(5).to_string(index=False)
+            schema_description = "\n".join(
+                f"- {col}: {str(df[col].dtype)}" for col in df.columns
+            )
 
-        if user_question:
-            prompt = build_prompt(user_question, st.session_state.data_dict, df_name="df", df=st.session_state.df)
+            prompt = f"""
+You are a data expert. You will receive a pandas DataFrame schema and a sample of the data.
+
+Schema:
+{schema_description}
+
+Data Sample:
+{preview_text}
+
+Now answer this question about the data:
+{user_question}
+"""
+
             try:
                 model = genai.GenerativeModel("gemini-pro")
                 response = model.generate_content(prompt)
-                st.markdown("### 🤖 Gemini's Answer")
+                st.markdown(f"**🧾 Question:** {user_question}")
+                st.markdown("**🧠 Gemini's Answer:**")
                 st.write(response.text)
             except Exception as e:
                 st.error(f"❌ Gemini API error: {e}")
-    else:
-        st.warning("Please upload both a dataset and generate/upload a data dictionary first.")
+else:
+    st.info("Please upload a dataset first to enable the chat.")
