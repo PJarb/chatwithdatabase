@@ -7,7 +7,7 @@ import textwrap
 try:
     key = st.secrets["gemini_api_key"]
     genai.configure(api_key=key)
-    model = genai.GenerativeModel("models/gemini-pro")
+    model = genai.GenerativeModel(model_name='gemini-2.0-flash-lite')
 except Exception as e:
     st.error(f"❌ Failed to load Gemini API: {e}")
     st.stop()
