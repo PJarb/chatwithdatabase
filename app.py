@@ -109,7 +109,7 @@ with tab3:
                     prompt = build_prompt(
                         question=user_question,
                         data_dict=st.session_state.data_dict,
-                        fd_name="df",
+                        df_name="df",
                         df=st.session_state.df
                     )
                     response = model.generate_content(prompt)
