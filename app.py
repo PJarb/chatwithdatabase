@@ -3,7 +3,6 @@ import pandas as pd
 import google.generativeai as genai
 import textwrap
 
-
 # 🔑 Load Gemini API Key (from secrets)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
