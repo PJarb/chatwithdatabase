@@ -106,7 +106,12 @@ with tab3:
         if user_question:
             with st.spinner("Thinking..."):
                 try:
-                    prompt = build_prompt(user_question, st.session_state.data_dict, df="df", df=st.session_state.df)
+                    prompt = build_prompt(
+                        question=user_question,
+                        data_dict=st.session_state.data_dict,
+                        fd_name="df",
+                        df=st.session_state.df
+                    )
                     response = model.generate_content(prompt)
                     st.markdown(f"**📜 Question:** {user_question}")
                     st.markdown("**🧠 Gemini's Answer:**")
