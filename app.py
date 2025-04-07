@@ -75,11 +75,15 @@ with tab2:
 
 # -------------------- Ask Questions -------------------- #
 def build_prompt(question, data_dict, df_name="df", df=None):
-    dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
-    sample_text = df.head(2).to_dict(orient="records") if df is not None else ""
+    data_dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
+    example_record = df.head(2).to_dict(orient="records") if df is not None else ""
+
     return f"""
-You are a helpful data analyst.
-Answer the user's question using the given DataFrame.
+You are a helpful Python code generator.
+Your goal is to write Python code snippets based on the user's question
+and the provided DataFrame information.
+
+Here's the context:
 
 **User Question:**
 {question}
@@ -87,14 +91,28 @@ Answer the user's question using the given DataFrame.
 **DataFrame Name:**
 {df_name}
 
-**Data Dictionary:**
-{dict_text}
+**DataFrame Details:**
+{data_dict_text}
 
-**Sample Data:**
-{sample_text}
+**Sample Data (Top 2 Rows):**
+{example_record}
 
-Respond with the answer directly.
-If calculation is required, explain your reasoning and show final result.
+**Instructions:**
+1. Write Python code that addresses the user's question by querying or
+manipulating the DataFrame.
+2. **Crucially, use the `exec()` function to execute the generated
+code.**
+3. Do not import pandas
+4. Change date column type to datetime
+5. **Store the result of the executed code in a variable named
+`ANSWER`.**
+This variable should hold the answer to the user's question (e.g.,
+a filtered DataFrame, a calculated value, etc.).
+6. Assume the DataFrame is already loaded into a pandas DataFrame object
+named `{df_name}`. Do not include code to load the DataFrame.
+7. Keep the generated code concise and focused on answering the question.
+8. If the question requires a specific output format (e.g., a list, a
+single value), ensure the `query_result` variable holds that format.
 """
 
 with tab3:
@@ -121,4 +139,3 @@ with tab3:
     else:
         st.info("Please upload a dataset first to enable the chat.")
 
-st.caption(f"Gemini SDK version: {genai.__version__}")
