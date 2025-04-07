@@ -124,7 +124,7 @@ Now answer this question about the data:
 """
 
                 try:
-                    model = genai.GenerativeModel("gemini-pro")
+                    model = genai.GenerativeModel("models/gemini-pro")
                     response = model.generate_content(prompt)
                     st.markdown(f"**📜 Question:** {user_question}")
                     st.markdown("**🧠 Gemini's Answer:**")
