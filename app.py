@@ -1,8 +1,9 @@
+install -U google-generativeai
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 import textwrap
-install -U google-generativeai
+
 
 # 🔑 Load Gemini API Key (from secrets)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
