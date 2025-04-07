@@ -116,8 +116,8 @@ Now answer this question about the data:
 {user_question}
 """
 
-            # ใช้ Gemini-Pro ในการตอบ
-            model = genai.GenerativeModel("gemini-pro")
+            # ใช้ Gemini ในการตอบ
+            model = genai.GenerativeModel('gemini-2.0-flash-lite')
             response = model.generate_content(prompt)
             st.markdown("#### 🧠 Gemini's Answer")
             st.write(response.text)
