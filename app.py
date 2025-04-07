@@ -72,7 +72,8 @@ with tab2:
                 dict_entries.append({
                     "Column Name": col,
                     "Data Type": inferred_type,
-                    "Example Value": sample_value"
+                    "Example Value": sample_value,
+                    "Description": "Auto-generated description (can be edited)"
                 })
 
             return pd.DataFrame(dict_entries)
