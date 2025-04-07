@@ -99,18 +99,18 @@ with tab3:
     st.markdown("---")
     st.header("💬  Ask a question about your dataset")
 
-    if "df" in locals():
+    if "df" in st.session_state and "data_dict" in st.session_state:
         user_question = st.text_input("Ask a question about your dataset:")
-    
-    if user_question:
-        with st.spinner("Thinking..."):
-            # ✅ Use safer preview (no tabulate dependency)
-            preview_text = df.head(5).to_string(index=False)
-            schema_description = "\n".join(
-                f"- {col}: {str(df[col].dtype)}" for col in df.columns
-            )
 
-            prompt = f"""
+        if user_question:
+            with st.spinner("Thinking..."):
+                preview_text = st.session_state.df.head(5).to_string(index=False)
+                schema_description = "\n".join(
+                    f"- {col}: {str(st.session_state.df[col].dtype)}"
+                    for col in st.session_state.df.columns
+                )
+
+                prompt = f"""
 You are a data expert. You will receive a pandas DataFrame schema and a sample of the data.
 
 Schema:
@@ -123,13 +123,13 @@ Now answer this question about the data:
 {user_question}
 """
 
-            try:
-                model = genai.GenerativeModel("gemini-pro")
-                response = model.generate_content(prompt)
-                st.markdown(f"**🧾 Question:** {user_question}")
-                st.markdown("**🧠 Gemini's Answer:**")
-                st.write(response.text)
-            except Exception as e:
-                st.error(f"❌ Gemini API error: {e}")
-else:
-    st.info("Please upload a dataset first to enable the chat.")
+                try:
+                    model = genai.GenerativeModel("gemini-pro")
+                    response = model.generate_content(prompt)
+                    st.markdown(f"**🧾 Question:** {user_question}")
+                    st.markdown("**🧠 Gemini's Answer:**")
+                    st.write(response.text)
+                except Exception as e:
+                    st.error(f"❌ Gemini API error: {e}")
+    else:
+        st.info("Please upload a dataset first to enable the chat.")
