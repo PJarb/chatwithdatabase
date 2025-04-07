@@ -100,7 +100,7 @@ with tab3:
     st.header("💬  Ask a question about your dataset")
 
     if "df" in locals():
-    user_question = st.text_input("Ask a question about your dataset:")
+        user_question = st.text_input("Ask a question about your dataset:")
     
     if user_question:
         with st.spinner("Thinking..."):
