@@ -133,3 +133,4 @@ Now answer this question about the data:
                     st.error(f"❌ Gemini API error: {e}")
     else:
         st.info("Please upload a dataset first to enable the chat.")
+st.caption(f"Gemini SDK version: {genai.__version__}")
