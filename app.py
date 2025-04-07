@@ -13,7 +13,7 @@ except Exception as e:
     st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
-st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
+st.title("🧐 Chat with Your CSV Dataset (Powered by Gemini AI)")
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
@@ -75,7 +75,7 @@ with tab2:
 
 # -------------------- Ask Questions -------------------- #
 def build_prompt(question, data_dict, df_name="df", df=None):
-    data_dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
+    data_dict_text = "\n".join('-' + row['column_name'] + ': ' + row['data_type'] + '. ' + row['description'] for _, row in data_dict.iterrows())
     example_record = df.head(2).to_dict(orient="records") if df is not None else ""
 
     return f"""
@@ -131,11 +131,25 @@ with tab3:
                         df=st.session_state.df
                     )
                     response = model.generate_content(prompt)
-                    st.markdown(f"**📜 Question:** {user_question}")
-                    st.markdown("**🧠 Gemini's Answer:**")
-                    st.write(response.text)
+
+                    query = response.text.replace("```", "")
+                    exec(query)
+
+                    explain_the_results = f'''
+                    the user asked {user_question},
+                    here is the results {ANSWER}
+                    answer the question and summarize the answer,
+                    include your opinions of the persona of this customer
+                    '''
+
+                    summary = model.generate_content(explain_the_results)
+
+                    st.markdown(f"**📜 Code Answered:**\n```python\n{query}\n```")
+                    st.markdown("**🧬 Gemini's Summary:**")
+                    st.write(summary.text)
                 except Exception as e:
                     st.error(f"❌ Gemini API error: {e}")
     else:
         st.info("Please upload a dataset first to enable the chat.")
 
+st.caption(f"Gemini SDK version: {genai.__version__}")
