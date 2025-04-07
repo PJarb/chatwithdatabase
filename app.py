@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
-import textwrap
 
-# 🔑 Load Gemini API Key (จาก secrets)
+# Load Gemini API Key
 try:
     key = st.secrets["gemini_api_key"]
     genai.configure(api_key=key)
@@ -74,14 +73,17 @@ with tab2:
     st.dataframe(data_dict)
 
 # -------------------- Ask Questions -------------------- #
-def build_code_prompt(question, data_dict, df_name="df", df=None):
-    dict_text = "\n".join('- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description'] for _, row in data_dict.iterrows())
-    sample_text = df.head(2).to_dict(orient="records") if df is not None else ""
+def build_prompt(question, data_dict, df_name="df", df=None):
+    data_dict_text = "\n".join(
+        '- ' + row['column_name'] + ': ' + row['data_type'] + ". " + row['description']
+        for _, row in data_dict.iterrows()
+    )
+    sample_data = df.head(2).to_dict(orient="records") if df is not None else ""
+
     return f"""
 You are a helpful Python code generator.
-Your goal is to write Python code snippets based on the user's question and the provided DataFrame information.
+Generate Python code that answers the user's question based on the DataFrame.
 
-Here's the context:
 **User Question:**
 {question}
 
@@ -89,23 +91,19 @@ Here's the context:
 {df_name}
 
 **DataFrame Details:**
-{dict_text}
+{data_dict_text}
 
-**Sample Data (Top 2 Rows):**
-{sample_text}
+**Sample Data:**
+{sample_data}
 
 **Instructions:**
-1. Write Python code that addresses the user's question by querying or manipulating the DataFrame.
-2. Use the `exec()` function to execute the generated code.
-3. Do not import pandas.
-4. Change date column type to datetime if needed.
-5. Store the result of the executed code in a variable named `ANSWER`.
-6. Assume the DataFrame is already loaded into a pandas DataFrame object named `{df_name}`.
-7. Keep the code concise and focused on answering the question.
+1. Do not import any external library like pandas or numpy.
+2. Do not use 'pd.' or 'np.' anywhere in the code.
+3. Assume the DataFrame is already loaded and named '{df_name}'.
+4. You can convert column types using native DataFrame methods like `.astype()` or `.to_datetime()` if needed.
+5. Write code that stores the final result in a variable called `ANSWER`.
+6. Do not include explanation, only valid executable Python code.
 """
-
-def clean_code_block(text):
-    return text.replace("```python", "").replace("```", "").strip()
 
 with tab3:
     st.markdown("---")
@@ -116,36 +114,31 @@ with tab3:
         if user_question:
             with st.spinner("Thinking..."):
                 try:
-                    prompt = build_code_prompt(
+                    prompt = build_prompt(
                         question=user_question,
                         data_dict=st.session_state.data_dict,
                         df_name="df",
                         df=st.session_state.df
                     )
                     response = model.generate_content(prompt)
-                    code = clean_code_block(response.text)
+                    code = response.text
 
-                    # Execute the generated code and retrieve ANSWER
                     try:
-                        exec_locals = {"df": st.session_state.df.copy()}
-                        exec(code, {}, exec_locals)
-                        answer = exec_locals.get("ANSWER", "No variable named 'ANSWER' found.")
+                        exec(code, globals())
+                        explain_prompt = f'''
+The user asked: {user_question}
+Here is the results: {ANSWER}
+Answer the question and summarize the answer.
+Include your opinions of the persona of this customer.
+'''
+                        summary = model.generate_content(explain_prompt).text
+
+                        st.markdown(f"**📜 Question:** {user_question}")
+                        st.markdown("**🧠 Gemini's Summary:**")
+                        st.markdown(summary)
                     except Exception as e:
-                        answer = f"❌ Error while executing generated code: {e}"
-
-                    # Summarize result
-                    explanation_prompt = f"""
-the user asked: {user_question},
-here is the results: {answer}
-answer the question and summarize the answer,
-include your opinions of the persona of this customer
-"""
-                    summary = model.generate_content(explanation_prompt)
-
-                    # Display
-                    st.markdown(f"**📜 Question:** {user_question}")
-                    st.markdown("**🧠 Gemini's Summary:**")
-                    st.write(summary.text)
+                        st.error(f"❌ Error in executing code from Gemini: {e}")
+                        st.code(code, language="python")
                 except Exception as e:
                     st.error(f"❌ Gemini API error: {e}")
     else:
