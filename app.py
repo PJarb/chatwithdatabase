@@ -15,39 +15,43 @@ st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
 st.title("🧠 Chat with Your Data (All-in-One)")
 
 # === Upload Dataset ===
-st.subheader("📁 Upload CSV Dataset")
-uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
-if uploaded_csv:
-    df = pd.read_csv(uploaded_csv)
-    st.session_state.df = df
-    st.success("✅ Dataset uploaded successfully!")
-    st.dataframe(df.head())
-else:
-    st.info("Please upload a CSV dataset to continue.")
-
-# === Upload or Generate Data Dictionary ===
 def generate_data_dictionary(df):
     dict_entries = []
     for col in df.columns:
         sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A"
         dtype = df[col].dtype
+
+        # แปลง dtype เป็น string ที่ Gemini เข้าใจ
         if pd.api.types.is_datetime64_any_dtype(df[col]):
-            inferred_type = "date"
+            inferred_type = "DATE"
         elif pd.api.types.is_integer_dtype(df[col]):
-            inferred_type = "int64"
+            inferred_type = "INT"
         elif pd.api.types.is_float_dtype(df[col]):
-            inferred_type = "float64"
+            inferred_type = "FLOAT"
         elif pd.api.types.is_bool_dtype(df[col]):
-            inferred_type = "bool"
+            inferred_type = "BOOL"
         else:
-            inferred_type = "string"
+            inferred_type = "STRING"
+
+        # 📍ใช้ Gemini ช่วย generate description
+        try:
+            prompt = f"""You are a data analyst. Please describe the meaning or likely purpose of the column named '{col}'.
+Its data type is {inferred_type} and here's an example value: '{sample_value}'.
+Write a concise and informative description for a data dictionary."""
+            response = model.generate_content(prompt)
+            description = response.text.strip()
+        except Exception as e:
+            description = f"This column likely represents '{col}'"
+
         dict_entries.append({
             "column_name": col,
             "data_type": inferred_type,
             "example_value": sample_value,
-            "description": f"This column likely represents '{col}'"
+            "description": description
         })
+
     return pd.DataFrame(dict_entries)
+
 
 if "df" in st.session_state:
     st.subheader("📑 Upload or Auto-Generate Data Dictionary")
