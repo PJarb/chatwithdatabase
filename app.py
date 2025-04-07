@@ -13,7 +13,7 @@ except Exception as e:
     st.stop()
 
 st.set_page_config(page_title="CSV Chatbot with Gemini", layout="wide")
-st.title("🧠 Chat with Your CSV Dataset (Powered by Gemini AI)")
+st.title("🧠 Chat with Your Database")
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(["📁 Upload Dataset", "📁 Data Dictionary", "💬 Ask Questions"])
