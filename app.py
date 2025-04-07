@@ -1,108 +1,85 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
 
-# โหลด Gemini API Key
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyBdf4nh_jx7Jq3M8lZ4Zbfim6GULaNr9iI")  # แก้ใส่ตรง ๆ ได้
-genai.configure(api_key=GEMINI_API_KEY)
+st.set_page_config(page_title="Upload Dataset + Dictionary", layout="wide")
+st.title("🧠 CSV Chatbot Assistant with Optional Data Dictionary")
 
-# ---------- ฟังก์ชันวิเคราะห์ column ด้วย Gemini ---------- #
-def generate_gemini_descriptions(df: pd.DataFrame) -> list:
-    model = genai.GenerativeModel("gemini-pro")
-    descriptions = []
-
-    for col in df.columns:
-        sample_values = df[col].dropna().astype(str).unique()[:5]
-        prompt = f"""
-You are a data analyst. Analyze the following column and provide a clear, concise description of what it likely represents.
-
-Column name: {col}
-Sample values: {', '.join(sample_values)}
-
-Respond with just the description in one sentence.
-"""
-        try:
-            response = model.generate_content(prompt)
-            descriptions.append(response.text.strip())
-        except Exception as e:
-            descriptions.append(f"(Error generating description: {e})")
-
-    return descriptions
-
-# ---------- ฟังก์ชันวิเคราะห์ประเภทข้อมูล ---------- #
-def infer_column_type(series: pd.Series) -> str:
-    if pd.api.types.is_datetime64_any_dtype(series):
-        return "date"
-    elif pd.api.types.is_integer_dtype(series):
-        return "int64"
-    elif pd.api.types.is_float_dtype(series):
-        return "float64"
-    elif pd.api.types.is_bool_dtype(series):
-        return "bool"
-    elif pd.api.types.is_string_dtype(series) or series.dtype == "object":
-        try:
-            parsed = pd.to_datetime(series, errors="coerce")
-            if parsed.notna().sum() > 0:
-                return "date"
-            else:
-                return "string"
-        except:
-            return "string"
-    else:
-        return str(series.dtype)
-
-# ---------- เริ่มต้น Streamlit App ---------- #
-st.set_page_config(page_title="CSV + Data Dictionary with Gemini", layout="wide")
-st.title("🧠 CSV Chatbot Assistant with Optional Data Dictionary (Gemini AI)")
-
+# Tabs: แยกเป็น 2 หน้าชัดเจน
 tab1, tab2 = st.tabs(["📁 Upload CSV Dataset", "📑 Upload Data Dictionary"])
 
 # -------------------- TAB 1: Upload CSV Dataset -------------------- #
 with tab1:
     st.header("📁 Upload CSV Dataset (Required)")
-    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"])
+    uploaded_csv = st.file_uploader("Upload your main dataset (.csv)", type=["csv"], key="csv_upload")
 
-    if uploaded_csv:
+    if uploaded_csv is not None:
         df = pd.read_csv(uploaded_csv)
         st.success("✅ Dataset uploaded successfully!")
-        st.subheader("🔍 Preview of Dataset")
+        st.subheader("📊 Preview of Dataset")
         st.dataframe(df.head())
     else:
         st.info("Please upload your main CSV dataset to proceed.")
 
-# -------------------- TAB 2: Upload or Generate Data Dictionary -------------------- #
+# -------------------- TAB 2: Upload Data Dictionary -------------------- #
 with tab2:
     st.header("📑 Upload Data Dictionary (Optional)")
-    uploaded_dict = st.file_uploader("Upload a data dictionary (.csv or .xlsx)", type=["csv", "xlsx"])
+    uploaded_dict = st.file_uploader("Upload a data dictionary (.csv or .xlsx)", type=["csv", "xlsx"], key="dict_upload")
 
-    if uploaded_dict:
+    # ถ้า user ไม่ได้อัปโหลด dictionary แต่มี dataset แล้ว → ให้สร้างอัตโนมัติ
+    if uploaded_dict is not None:
+        st.success("✅ Data Dictionary uploaded!")
         try:
             if uploaded_dict.name.endswith(".csv"):
                 data_dict = pd.read_csv(uploaded_dict)
             else:
                 data_dict = pd.read_excel(uploaded_dict)
-            st.success("✅ Data Dictionary uploaded.")
             st.subheader("📖 Uploaded Data Dictionary")
             st.dataframe(data_dict)
         except Exception as e:
-            st.error(f"❌ Error reading dictionary: {e}")
+            st.error(f"❌ Error reading data dictionary: {e}")
+    elif "df" in locals():
+        st.warning("⚠️ No Data Dictionary uploaded. Generating one with AI...")
 
-    elif 'df' in locals():
-        st.warning("⚠️ No Data Dictionary uploaded. Generating one with Gemini AI...")
+        def generate_data_dictionary(df):
+            dict_entries = []
 
-        # Generate types and descriptions
-        types = [infer_column_type(df[col]) for col in df.columns]
-        examples = [df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A" for col in df.columns]
-        descriptions = generate_gemini_descriptions(df)
+            for col in df.columns:
+                sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else "N/A"
+                dtype = df[col].dtype
 
-        data_dict = pd.DataFrame({
-            "Column Name": df.columns,
-            "Data Type": types,
-            "Example Value": examples,
-            "Description": descriptions
-        })
+                # ตรวจจับประเภทข้อมูลโดยละเอียด
+                if pd.api.types.is_datetime64_any_dtype(df[col]):
+                    inferred_type = "date"
+                elif pd.api.types.is_integer_dtype(df[col]):
+                    inferred_type = "int64"
+                elif pd.api.types.is_float_dtype(df[col]):
+                    inferred_type = "float64"
+                elif pd.api.types.is_bool_dtype(df[col]):
+                    inferred_type = "bool"
+                elif pd.api.types.is_string_dtype(df[col]) or dtype == "object":
+                    try:
+                        # พยายามแปลงเป็นวันที่เพื่อดูว่าใช่ date หรือไม่
+                        parsed = pd.to_datetime(df[col], errors="coerce")
+                        if parsed.notna().sum() > 0:
+                            inferred_type = "date"
+                        else:
+                            inferred_type = "string"
+                    except:
+                        inferred_type = "string"
+                else:
+                    inferred_type = str(dtype)
 
-        st.subheader("🤖 Gemini-Generated Data Dictionary")
-        st.dataframe(data_dict)
+                dict_entries.append({
+                    "Column Name": col,
+                    "Data Type": inferred_type,
+                    "Example Value": sample_value,
+                    "Description": "Auto-generated description (can be edited)"
+                })
+
+            return pd.DataFrame(dict_entries)
+
+        generated_dict = generate_data_dictionary(df)
+        st.subheader("🤖 Auto-Generated Data Dictionary")
+        st.dataframe(generated_dict)
     else:
-        st.info("Please upload a dataset first in the first tab.")
+        st.info("Please upload a CSV dataset first in the first tab.")
